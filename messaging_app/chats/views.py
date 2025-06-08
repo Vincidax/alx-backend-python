@@ -30,14 +30,21 @@ class ConversationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(conversation)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    def get_queryset(self):
+        # Only return conversations the user is part of
+        return Conversation.objects.filter(participants=self.request.user)
+
 
 class MessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
-    queryset = Message.objects.all()
     serializer_class = MessageSerializer
 
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['sent_at']
+
+    def get_queryset(self):
+        # ✅ Restrict messages to only those in conversations the user participates in
+        return Message.objects.filter(conversation__participants=self.request.user)
 
     def get_object(self):
         obj = super().get_object()
@@ -77,10 +84,8 @@ class MessageViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        sender = request.user
-
         message = Message.objects.create(
-            sender=sender,
+            sender=request.user,
             conversation=conversation,
             message_body=message_body
         )
