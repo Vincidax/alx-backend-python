@@ -1,5 +1,3 @@
-# chats/middleware.py
-
 from datetime import datetime, timedelta
 from django.http import HttpResponseForbidden, JsonResponse
 import logging
@@ -18,7 +16,6 @@ class RequestLoggingMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        # Use getattr for safe user resolution (only if AuthenticationMiddleware is active)
         user = getattr(request, 'user', None)
         user_info = str(user) if user and hasattr(user, 'is_authenticated') and user.is_authenticated else 'Anonymous'
         logging.info(f"{datetime.now()} - User: {user_info} - Path: {request.path}")
@@ -43,10 +40,9 @@ class RestrictAccessByTimeMiddleware:
 class OffensiveLanguageMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
-        self.message_logs = {}  # Tracks IP-based message timestamps
+        self.message_logs = {}
 
     def __call__(self, request):
-        # Apply limit only to POST requests to /messages/ endpoint
         if request.method == 'POST' and '/messages/' in request.path:
             ip = self.get_client_ip(request)
             now = datetime.now()
@@ -55,7 +51,6 @@ class OffensiveLanguageMiddleware:
             if ip not in self.message_logs:
                 self.message_logs[ip] = []
 
-            # Clean out timestamps older than 1 minute
             self.message_logs[ip] = [ts for ts in self.message_logs[ip] if now - ts < window]
 
             if len(self.message_logs[ip]) >= 5:
@@ -64,7 +59,6 @@ class OffensiveLanguageMiddleware:
                     status=429
                 )
 
-            # Add current timestamp
             self.message_logs[ip].append(now)
 
         return self.get_response(request)
@@ -74,3 +68,29 @@ class OffensiveLanguageMiddleware:
         if x_forwarded_for:
             return x_forwarded_for.split(',')[0].strip()
         return request.META.get('REMOTE_ADDR')
+
+
+class RolepermissionMiddleware:
+    """
+    Middleware that enforces role-based access control.
+    Only users with role 'admin' or 'moderator' are allowed.
+    All other users receive 403 Forbidden.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        # Allow access to Django admin panel
+        if request.path.startswith('/admin'):
+            return self.get_response(request)
+
+        user = getattr(request, 'user', None)
+
+        if user and hasattr(user, 'is_authenticated') and user.is_authenticated:
+            user_role = getattr(user, 'role', None)
+            if user_role in ['admin', 'moderator']:
+                return self.get_response(request)
+            else:
+                return JsonResponse({'error': 'Forbidden: Insufficient role'}, status=403)
+
+        return JsonResponse({'error': 'Forbidden: Authentication required'}, status=403)

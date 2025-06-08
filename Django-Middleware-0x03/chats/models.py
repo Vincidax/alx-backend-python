@@ -8,6 +8,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     password = models.CharField(max_length=128)
     phone_number = models.CharField(max_length=20)
+    role = models.CharField(max_length=20, choices=[('admin', 'Admin'), ('moderator', 'Moderator'), ('user', 'User')])
 
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'phone_number']
     USERNAME_FIELD = 'username'
