@@ -5,19 +5,15 @@ from rest_framework.exceptions import PermissionDenied
 from .models import Conversation, Message
 from .serializers import ConversationSerializer, MessageSerializer
 from .permissions import IsParticipantOfConversation
-from django.shortcuts import get_object_or_404
-
 
 class ConversationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
+    queryset = Conversation.objects.all()
     serializer_class = ConversationSerializer
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['participants__username']
     ordering_fields = ['created_at']
-
-    def get_queryset(self):
-        return Conversation.objects.filter(participants=self.request.user)
 
     def create(self, request, *args, **kwargs):
         participants = request.data.get('participants')
@@ -29,7 +25,6 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
         conversation = Conversation.objects.create()
         conversation.participants.set(participants)
-        conversation.participants.add(request.user)
         conversation.save()
 
         serializer = self.get_serializer(conversation)
@@ -38,28 +33,64 @@ class ConversationViewSet(viewsets.ModelViewSet):
 
 class MessageViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsParticipantOfConversation]
+    queryset = Message.objects.all()
     serializer_class = MessageSerializer
 
     filter_backends = [filters.OrderingFilter]
     ordering_fields = ['sent_at']
 
-    def get_queryset(self):
-        return Message.objects.filter(conversation__participants=self.request.user)
-
-    def perform_create(self, serializer):
-        conversation = serializer.validated_data.get("conversation")
+    def get_object(self):
+        obj = super().get_object()
+        conversation = obj.conversation
         if self.request.user not in conversation.participants.all():
-            raise PermissionDenied("You are not a participant in this conversation.")
-        serializer.save(sender=self.request.user)
+            raise PermissionDenied("You are not a participant of this conversation.")
+        return obj
+
+    def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        conversation_id = data.get('conversation')
+        message_body = data.get('message_body')
+
+        if not conversation_id:
+            return Response(
+                {"error": "Conversation ID is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+        except Conversation.DoesNotExist:
+            return Response(
+                {"error": "Conversation not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if request.user not in conversation.participants.all():
+            return Response(
+                {"error": "You are not a participant of this conversation."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not message_body or len(message_body.strip()) == 0:
+            return Response(
+                {"error": "Message body cannot be empty."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        sender = request.user
+
+        message = Message.objects.create(
+            sender=sender,
+            conversation=conversation,
+            message_body=message_body
+        )
+        serializer = self.get_serializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
-        if request.user not in instance.conversation.participants.all():
-            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        if request.user not in instance.conversation.participants.all():
-            return Response({"detail": "Forbidden"}, status=status.HTTP_403_FORBIDDEN)
         return super().destroy(request, *args, **kwargs)
