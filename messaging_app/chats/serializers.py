@@ -11,24 +11,41 @@ class UserSerializer(serializers.ModelSerializer):
 
 # Serializer for the Message model
 class MessageSerializer(serializers.ModelSerializer):
-    # Represent the sender as a nested User object (read-only)
     sender = UserSerializer(read_only=True)
+
+    # Explicitly declare message_body as CharField
+    message_body = serializers.CharField(max_length=1000)
+
+    # SerializerMethodField to provide a preview of the message content
+    preview = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        # Fields to serialize for each message
-        fields = ['message_id', 'sender', 'message_body', 'sent_at']
+        fields = ['message_id', 'sender', 'message_body', 'sent_at', 'preview']
+
+    def get_preview(self, obj):
+        """
+        Return the first 50 characters of the message body as a preview.
+        """
+        return obj.message_body[:50]
+
+    def validate_message_body(self, value):
+        """
+        Validate that the message body is not empty or just whitespace.
+        """
+        if not value or len(value.strip()) == 0:
+            raise serializers.ValidationError("Message body cannot be empty.")
+        return value
 
 
 # Serializer for the Conversation model
 class ConversationSerializer(serializers.ModelSerializer):
-    # Include all participants in the conversation as nested user objects (read-only)
+    # Nested users participating in the conversation
     participants = UserSerializer(many=True, read_only=True)
 
-    # Include all related messages in the conversation as nested message objects (read-only)
+    # Nested messages within the conversation
     messages = MessageSerializer(many=True, read_only=True)
 
     class Meta:
         model = Conversation
-        # Fields to include in the serialized conversation output
         fields = ['conversation_id', 'participants', 'messages', 'created_at']
