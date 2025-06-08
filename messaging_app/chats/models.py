@@ -6,10 +6,11 @@ import uuid
 class User(AbstractUser):
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
+    password = models.CharField(max_length=128)
     phone_number = models.CharField(max_length=20)
 
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name', 'phone_number']
-    USERNAME_FIELD = 'username'  # or 'email' if email login is used
+    USERNAME_FIELD = 'username'
 
 
 class Conversation(models.Model):
