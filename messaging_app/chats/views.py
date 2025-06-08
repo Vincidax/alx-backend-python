@@ -32,6 +32,7 @@ class ConversationViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     def get_queryset(self):
+        # This is fine as it is
         return Conversation.objects.filter(participants=self.request.user)
 
 
@@ -60,7 +61,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not conversation_id:
             return Response({"error": "Conversation ID is required."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            conversation = Conversation.objects.get(id=conversation_id)
+            conversation = Conversation.objects.get(conversation_id=conversation_id)
         except Conversation.DoesNotExist:
             return Response({"error": "Conversation not found."}, status=status.HTTP_404_NOT_FOUND)
 
