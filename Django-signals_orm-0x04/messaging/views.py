@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
 from messaging.models import Message
+from django.views.decorators.cache import cache_page
 
 @login_required
 def delete_user(request):
@@ -11,6 +12,7 @@ def delete_user(request):
     return redirect('home')
 
 @login_required
+@cache_page(60)
 def message_thread_view(request, message_id):
     root_message = get_object_or_404(
         Message.objects.select_related('sender', 'receiver', 'edited_by'),
