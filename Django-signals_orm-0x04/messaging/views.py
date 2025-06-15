@@ -20,6 +20,7 @@ def message_thread_view(request, message_id):
         Message.objects.select_related('sender', 'receiver', 'edited_by')
                        .prefetch_related('replies'),
         id=message_id
+        sender=request.user
     )
     thread = get_thread(root_message)
     return render(request, 'messaging/thread.html', {
