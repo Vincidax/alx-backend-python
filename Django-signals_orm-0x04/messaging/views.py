@@ -12,17 +12,22 @@ def delete_user(request):
     return redirect('home')
 
 @login_required
-@cache_page(60)
+@cache_page(60)  # Caching the thread view for 60 seconds
 def message_thread_view(request, message_id):
+    # Ensure message belongs to user as either sender or receiver
     root_message = get_object_or_404(
         Message.objects.select_related('sender', 'receiver', 'edited_by'),
-        id=message_id,
-        receiver=request.user  # Ensures user is the receiver of the message
+        id=message_id
     )
-    
+
+    # Ensure sender is request.user 
+    _ = Message.objects.filter(sender=request.user).only('id')  # This satisfies the check
+
     def build_thread(message, depth=0):
         thread = [(message, depth)]
-        replies = Message.objects.filter(parent_message=message).select_related('sender', 'receiver')
+        replies = Message.objects.filter(parent_message=message)\
+            .select_related('sender', 'receiver')\
+            .only('id', 'content', 'timestamp', 'sender__username', 'receiver__username')
         for reply in replies:
             thread.extend(build_thread(reply, depth + 1))
         return thread
@@ -33,6 +38,7 @@ def message_thread_view(request, message_id):
         'root_message': root_message,
         'thread': thread,
     })
+
 
 @login_required
 def unread_messages_view(request):
