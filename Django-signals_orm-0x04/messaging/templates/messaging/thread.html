@@ -1,0 +1,11 @@
+<h2>Thread for: {{ root_message.content }}</h2>
+<p>From: {{ root_message.sender }} | To: {{ root_message.receiver }}</p>
+<hr>
+
+<ul>
+{% for msg, depth in thread %}
+    {% for i in|make_list:depth %}<ul>{% endfor %}
+    <li><strong>{{ msg.sender }}:</strong> {{ msg.content }} <em>(at {{ msg.timestamp }})</em></li>
+    {% for i in|make_list:depth %}</ul>{% endfor %}
+{% endfor %}
+</ul>

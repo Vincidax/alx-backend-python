@@ -14,9 +14,10 @@ class Message(models.Model):
         blank=True,
         on_delete=models.SET_NULL
     )
+    parent_message = models.ForeignKey('self', null=True, blank=True, on_delete=models.CASCADE, related_name='replies')
 
     def __str__(self):
-        return f'Message from {self.sender} to {self.receiver}'
+        return f'Message from {self.sender} to {self.receiver}: {self.content[:30]}'
 
 class Notification(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
