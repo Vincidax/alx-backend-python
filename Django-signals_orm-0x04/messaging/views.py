@@ -1,9 +1,7 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import logout
-from django.contrib.auth.models import User
 from messaging.models import Message
-from messaging.utils import get_thread
 
 @login_required
 def delete_user(request):
@@ -37,7 +35,7 @@ def message_thread_view(request, message_id):
 @login_required
 def unread_messages_view(request):
     user = request.user
-    unread_messages = Message.unread_messages.unread_for_user(user).select_related('sender')
+    unread_messages = Message.unread.unread_for_user(user).select_related('sender').only('id', 'sender', 'content', 'timestamp')
     return render(request, 'messaging/unread_messages.html', {
         'unread_messages': unread_messages,
     })
