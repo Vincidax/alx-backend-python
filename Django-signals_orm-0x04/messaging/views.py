@@ -17,15 +17,27 @@ def delete_user(request):
 @login_required
 def message_thread_view(request, message_id):
     root_message = get_object_or_404(
-        Message.objects.select_related('sender', 'receiver', 'edited_by')
-                       .prefetch_related('replies'),
-        id=message_id
-        sender=request.user
+        Message.objects.select_related('sender', 'receiver', 'edited_by'),
+        id=message_id,
+        sender=request.user  # or adjust your filter as needed
     )
-    thread = get_thread(root_message)
+    
+    def build_thread(message, depth=0):
+        # start with the current message and its depth
+        thread = [(message, depth)]
+        
+        # explicitly use Message.objects.filter to get replies for this message
+        replies = Message.objects.filter(parent_message=message).select_related('sender', 'receiver')
+        
+        for reply in replies:
+            thread.extend(build_thread(reply, depth + 1))
+        return thread
+
+    thread = build_thread(root_message)
+
     return render(request, 'messaging/thread.html', {
         'root_message': root_message,
-        'thread': thread
+        'thread': thread,
     })
 
 def build_thread(message, depth=0):
