@@ -1,14 +1,33 @@
-# messaging_app/chats/auth.py
+#!/usr/bin/env python3
+""" "
+Authentication-related class
+for chat application
+ensure email authentication is explicit, enhancing modularity.
+"""
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from rest_framework_simplejwt.tokens import RefreshToken
 
-def get_tokens_for_user(user):
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
-    Utility to generate JWT access and refresh tokens for a given user.
+    custom serializer to use email as username field
+    for jwt Token authentication
     """
-    refresh = RefreshToken.for_user(user)
 
-    return {
-        'refresh': str(refresh),
-        'access': str(refresh.access_token),
-    }
+    user_name_field = "email"
+
+    def validate(self, attrs):
+        """
+        validates credentials
+        """
+        credentials = {"email": attrs.get("email"), "password": attrs.get("password")}
+        data = super().validate(credentials)
+        return data
+
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom view to use email for JWT authentication
+    """
+
+    serializer_class = CustomTokenObtainPairSerializer

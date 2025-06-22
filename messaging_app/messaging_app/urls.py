@@ -14,23 +14,21 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.contrib import admin
 from django.urls import path, include
-from django.http import HttpResponse
 from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
+    # TokenObtainPairView,
     TokenRefreshView,
 )
-
-def home(request):
-    return HttpResponse("Welcome to the Messaging App API!")
+from django.conf import settings
+from django.conf.urls.static import static
+from chats.auth import CustomTokenObtainPairView
 
 urlpatterns = [
-    path('', home),
-    path('admin/', admin.site.urls),
-    path('api/', include('chats.urls')),
-    # JWT token endpoints
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),  # login -> get access and refresh tokens
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),  # get new access token using refresh token
-    path('api-auth/', include('rest_framework.urls')),
-]
+    path("admin/", admin.site.urls),
+    path("api/", include("chats.urls")),
+    path("api-auth/", include("rest_framework.urls", namespace="rest_framework")),
+    path("api/token/", CustomTokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
