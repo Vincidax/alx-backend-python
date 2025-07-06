@@ -1,0 +1,21 @@
+#!/bin/bash
+
+echo "🔍 Checking if Minikube is installed..."
+
+if ! command -v minikube &> /dev/null
+then
+    curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+fi
+
+echo "starting Minikube cluster..."
+minikube start
+
+echo "Waiting for Kubernetes cluster info..."
+sleep 5
+
+echo "Getting cluster info:"
+kubectl cluster-info
+
+echo "Listing available pods in all namespaces:"
+kubectl get pods --all-namespaces

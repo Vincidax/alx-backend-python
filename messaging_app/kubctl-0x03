@@ -1,0 +1,22 @@
+#!/bin/bash
+
+echo "📦 Applying updated blue deployment with image version 2.0..."
+kubectl apply -f blue_deployment.yaml
+
+echo "📡 Monitoring rollout status..."
+kubectl rollout status deployment/django-blue
+
+echo "🌐 Starting curl requests to test uptime..."
+SERVICE_IP=$(minikube service messaging-service --url)
+echo "Service URL: $SERVICE_IP"
+
+echo "🔁 Sending 20 requests..."
+for i in {1..20}; do
+  echo -n "Request $i: "
+  curl --max-time 2 -s -o /dev/null -w "%{http_code}\n" "$SERVICE_IP/api/"
+  sleep 1
+done
+
+echo "✅ Checking updated pods:"
+kubectl get pods -l app=messaging,version=blue -o wide
+

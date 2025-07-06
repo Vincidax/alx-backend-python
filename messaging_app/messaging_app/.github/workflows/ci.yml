@@ -1,0 +1,76 @@
+name: Django CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DJANGO_DB_HOST: 127.0.0.1
+      DJANGO_DB_PORT: 3306
+      DJANGO_DB_NAME: test_db
+      DJANGO_DB_USER: test_user
+      DJANGO_DB_PASSWORD: test_pass
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8 coverage
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        # The first flake8 command will fail the build on errors
+
+      - name: Wait for MySQL
+        run: |
+          until mysqladmin ping -h"$DJANGO_DB_HOST" -u"$DJANGO_DB_USER" -p"$DJANGO_DB_PASSWORD" --silent; do
+            sleep 2
+          done
+
+      - name: Run Django migrations
+        run: |
+          python manage.py migrate
+
+      - name: Run tests with coverage
+        run: |
+          coverage run manage.py test
+          coverage xml
+          coverage report
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.xml

@@ -1,192 +1,75 @@
-#!/usr/bin/env python3
-"""
-The model serializers
-They convert model instances
-into json for the API resposnes. They also convert
-JSON into model nstances when creating or udating data
-"""
-import re
 from rest_framework import serializers
-from .models import User, Message, Conversation
+from django.contrib.auth.hashers import make_password
+from .models import User, Conversation, Message
 
 
 class UserSerializer(serializers.ModelSerializer):
     """
-    serializer for users
+    Serializer for User model.
     """
-
-    password = serializers.CharField(min_length=8, write_only=True)
+    full_name = serializers.SerializerMethodField()
 
     class Meta:
-        """
-        meta class
-        """
-
         model = User
-        fields = [
-            "user_id",
-            "email",
-            "first_name",
-            "username",
-            "last_name",
-            "profile_picture",
-            "status",
-            "password",
-        ]
-        extra_kwargs = {"password": {"write_only": True}}
+        fields = '__all__'
 
-    def create(self, validated_data):
-        """
-        creates new user with hashed password
-        """
-        try:
-            password = validated_data.pop("password")
-            user = User(**validated_data)
-            user.set_password(password)
-            user.save()
-            return user
-        except Exception as e:
-            raise serializers.ValidationError(f"Failed to create user: {str(e)}")
+    def get_full_name(self, obj: User) -> str:
+        """ Returns the full name of the user by combining first and last names."""
+        return f"{obj.first_name} {obj.last_name}".strip()
 
-    def validate_password(self, value):
-        """
-        Validates passsword meets security requirements
-        """
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
-            raise serializers.ValidationError(
-                "Password must contain at least one special character"
-            )
+    def validate_email(self, value: str) -> str:
+        """ Validates that the email ends with '.com' """
+        if not value.endswith('.com'):
+            raise serializers.ValidationError("Email must end with .com")
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("Email already exists")
+        if not value:
+            raise serializers.ValidationError("Email cannot be empty")
+        if value[0].isupper():
+            raise serializers.ValidationError("Email must start with an lowercase letter")
+        if not value[0].isalpha():
+            raise serializers.ValidationError("Email must start with a letter")
+        if '@' not in value:
+            raise serializers.ValidationError("Email must contain '@'")
         return value
 
+    def validate_username(self, value: str) -> str:
+        """ Validates that the username is unique and not empty. """
+        if not value:
+            raise serializers.ValidationError("Username cannot be empty")
+        if User.objects.filter(username=value).exists():
+            raise serializers.ValidationError("Username already exists")
+        if not value[0].isalpha():
+            raise serializers.ValidationError("Username must start with a letter")
+        return value
 
-class LightUserSerializer(serializers.ModelSerializer):
-    """
-    light serializer for sender
-    """
-
-    class Meta:
-        """
-        meta class
-        """
-
-        model = User
-        fields = ["user_id", "email"]
-
-
-class MessageSerializer(serializers.ModelSerializer):
-    """
-    The message serializer
-    """
-
-    # facilitates nested relationship where message shows sender info
-    # and not just a sender id
-    sender = LightUserSerializer(read_only=True)
-
-    # to accept sender id in a post
-    sender_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), write_only=True, source="sender"
-    )
-
-    # Accept convesation id in a post
-    conversation_id = serializers.PrimaryKeyRelatedField(
-        queryset=Conversation.objects.all(), write_only=True, source="conversation"
-    )
-    read_by = LightUserSerializer(many=True, read_only=True)
-
-    class Meta:
-        """
-        meta class
-        """
-
-        model = Message
-        fields = [
-            "message_id",
-            "sender",  # nested read
-            "sender_id",  # write only
-            "conversation_id",  # write only
-            "message_body",
-            "sent_at",
-            "message_type",
-            "attachment",
-            "read_by",
-        ]
-
-    def create(self, validated_data):
-        """
-        create new message with provider sender and conversation
-        """
-        try:
-            message = Message.objects.create(**validated_data)
-            # mark message as read by sender
-            message.read_by.add(validated_data["sender"])
-            return message
-        except Exception as e:
-            raise serializers.ValidationError(f"Failed to create message: {str(e)}")
-
-    def validate(self, data):
-        """
-        validate message type and attachment
-        """
-        message_type = data.get("message_type", "TEXT")
-        attachment = data.get("attachment")
-        if message_type != "TEXT" and not attachment:
-            raise serializers.ValidationError(
-                f"Attachment required for {message_type} message"
-            )
-        return data
+    def create(self, validated_data: dict) -> User:
+        """Overide create method to hash the password before saving."""
+        validated_data['password'] = make_password(validated_data['password'])
+        return super().create(validated_data)
 
 
 class ConversationSerializer(serializers.ModelSerializer):
     """
-    The conversation serializer
-    Handle conversation creation and retrieval
+    Serializer for Conversation model.
     """
-
-    # Show all users in a conversation
-    participants = LightUserSerializer(many=True, read_only=True)
-    # Show all related messages
-    messages = MessageSerializer(many=True, read_only=True)
-    participant_ids = serializers.ListField(
-        child=serializers.UUIDField(), write_only=True
+    participants = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=User.objects.all(), required=True
     )
-    last_message = serializers.SerializerMethodField()
 
     class Meta:
-        """
-        meta class
-        """
-
         model = Conversation
-        fields = [
-            "conversation_id",
-            "participants",
-            "participant_ids",
-            "name",
-            "created_at",
-            "messages",
-            "last_message",
-        ]
+        fields = '__all__'
 
-    def get_last_message(self, obj):
-        """
-        get most recent message in conversation
-        """
-        last_message = obj.last_message()
-        return MessageSerializer(last_message).data if last_message else None
 
-    def create(self, validated_data):
-        """
-        Create new conversation with participants
-        """
-        try:
-            participant_ids = validated_data.pop("participant_ids")
-            users = User.objects.filter(user_id__in=participant_ids)
-            if users.count() != len(participant_ids):
-                raise serializers.ValidationError("One or more users not found")
-            conversation = Conversation.objects.create(**validated_data)
-            conversation.participants.set(users)
-            return conversation
-        except Exception as e:
-            raise serializers.ValidationError(
-                f"Failed to create conversation: {str(e)}"
-            )
+class MessageSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Message model.
+    """
+    sender = UserSerializer(read_only=True)
+    conversation = serializers.PrimaryKeyRelatedField(
+        queryset=Conversation.objects.all())
+
+    class Meta:
+        model = Message
+        fields = '__all__'

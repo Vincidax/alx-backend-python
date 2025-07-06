@@ -1,0 +1,59 @@
+pipeline {
+    agent any
+
+    environment {
+        GIT_CREDENTIALS_ID = 'github-creds' // Replace with your Jenkins GitHub credentials ID
+        VENV_DIR = 'venv'
+        DOCKER_IMAGE = 'your-dockerhub-username/messaging_app:latest' // Change to your Docker Hub repo
+        DOCKER_CREDENTIALS_ID = 'dockerhub-creds' // Replace with your Jenkins Docker Hub credentials ID
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git credentialsId: "${env.GIT_CREDENTIALS_ID}", url: 'https://github.com/stepholo/alx-backend-python.git', branch: 'main'
+            }
+        }
+        stage('Install Dependencies') {
+            steps {
+                dir('messaging_app') {
+                    sh 'python -m venv ${VENV_DIR}'
+                    sh './${VENV_DIR}/bin/pip3 install --upgrade pip'
+                    sh './${VENV_DIR}/bin/pip3 install -r messaging_app/requirements.txt'
+                    sh './${VENV_DIR}/bin/pip3 install pytest pytest-html'
+                }
+            }
+        }
+        stage('Run Tests') {
+            steps {
+                dir('messaging_app') {
+                    sh './${VENV_DIR}/bin/pytest --html=pytest_report.html'
+                }
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    dockerImage = docker.build("${DOCKER_IMAGE}", "--file dockerfile .")
+                }
+            }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS_ID}") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            dir('messaging_app') {
+                archiveArtifacts artifacts: 'pytest_report.html', fingerprint: true
+                junit '**/test-results.xml'
+            }
+        }
+    }
+}

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+echo "🚀 Deploying Blue version..."
+kubectl apply -f blue_deployment.yaml
+
+echo "🚀 Deploying Green version..."
+kubectl apply -f green_deployment.yaml
+
+echo "⏳ Waiting for pods to start..."
+sleep 10
+
+echo "🔍 Checking logs of Green version pods for errors..."
+GREEN_PODS=$(kubectl get pods -l version=green -o jsonpath='{.items[*].metadata.name}')
+
+for pod in $GREEN_PODS; do
+  echo "📄 Logs for $pod:"
+  kubectl logs $pod | grep -i error || echo "✅ No errors found"
+done
+
